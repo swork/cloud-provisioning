@@ -1,0 +1,330 @@
+#+TITLE: Test AWS Provisioning
+#+DATE: [2020-04-21 Tue]
+#+AUTHOR: Steve Work
+#+STARTUP: hideblocks
+
+This is an Emacs Org file. It contains instructions and code to demonstrate and
+exercise the AWS provisioning tools nearby. These tools include Python packages
+and modules to manipulate AWS service configurations. They also include a Web
+Service Gateway Interface (WSGI) adapter that runs standardized Python web
+service code under AWS Lambda, accounting for the various ways HTTP requests can
+be arranged to invoke a Lambda function.
+
+AWS Lambda functions face certain restrictions that follow from their
+constrained operating environment, which similarly constrain WSGI apps running
+through these tools. Lambda may run code from scratch or re-run code that's
+already been used. It also limits, and bills by, milliseconds of execution and
+megabytes of RAM. Accordingly this stuff is not suited for running WSGI apps
+that execute for a long time, or that block while executing; nor is it well
+suited to apps that consume or generate large volumes of data (partly because
+request and response bodies are buffered). Nor again will it cope well with apps
+that maintain server-side state, unless that state is serialized from and back
+into RAM as needed. (In-process RAM caches can work, but there's a need to be
+mindful of total RAM used.)
+
+The code defined in this Org file creates an example of a Lambda service fed by
+AWS API Gateway, serving an example WSGI test app provided from werkzeug. You'll
+"tangle" the code (extract it from this document into separate files) using
+Emacs function org-babel-tangle, following instructions below.
+
+The generated files go into =./work= under whatever is the current directory.
+
+Then you'll run a shell script, =work/_setup.sh=, to set up the AWS services in
+your account (already established and available via command-line setup files
+=~/.aws/config= and =~/.aws/credentials=).
+
+Finally you'll run a local test program against the new AWS service, or twiddle
+it ad-hoc using curl or a similar HTTP request generator. When you're all the
+way done there's a program to clean up AWS for you, removing the test services.
+
+
+* Overview
+
+The section [[Declarations]] below gives parameters for this application. The
+remaining sections create boilerplate script files that use these declarations.
+application.)
+
+** Quick start:
+
+Dependencies:
+
+ - GNU coreutils' realpath (~brew install coreutils~ on OSX)
+
+1. Establish an AWS account and local ~/.aws/config and ~/.aws/credentials.
+   [[https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html][These instructions]] are current as I'm writing.
+
+2. Fix up the ~vars~ block below for your account number and AWS region.
+
+3. In this file in Emacs hit C-c C-v C-t ("tangle" sources defined here). Or run
+   this shell command:
+ #+BEGIN_EXAMPLE
+   $ emacs -batch AWS.org --eval '(org-babel-tangle)'
+ #+END_EXAMPLE
+   Generated source files go into ~./work~.
+
+4. Make ~./work~ a properly-provisioned Python venv like this (pick a Python
+   interpreter matching the AWS runtime in [[Declarations]]):
+ #+BEGIN_EXAMPLE
+   $ work/_setup.sh path/to/python
+ #+END_EXAMPLE
+   Expect an error-free run to completion.
+
+5. ~work/_make_lambda_package.sh~
+
+6. ~work/bin/python work/_create.py~
+
+7. ~work/bin/python work/_destroy.py~
+
+** Further configuration
+
+*** Environment variables
+
+The WSGI adapter, and maybe your WSGI app, respond to environment variables. AWS
+lets you set these in various places:
+
+ - In API Gateway (v2 CLI), find "Stage variables" under Deploy | Stages
+ - In Lambda find "Environment variables" in the Function definition
+
+*** WSGI Adapter variables
+
+| Name        | Value           | Description                                                  |
+|-------------+-----------------+--------------------------------------------------------------|
+| =LEVEL=     | 10 (lots) to 50 | Emit execution details on stderr, which end up in CloudWatch |
+| =BASE_PATH= | string          | Prefix accounting for Lambda@Edge origin/behavior            |
+
+* Declarations
+Application-specific parameters are set up here. Actual apps will make a similar
+block (maybe named =application_setup.py=, without the underscore) and reference
+it in their corresponding create, destroy, etc. scripts.
+
+#+BEGIN_SRC python :eval no :tangle work/_application_setup.py :mkdirp true :noweb no-export
+  """Provisioning configuration example - AWS wsgiTester"""
+  from renlabs.provisioning.aws import (
+      AWSBase,
+      LambdaExecutionRole,
+      LambdaFunction,
+      GatewayApi,
+      Route,
+      DefaultRoute)
+
+  NAME = "wsgiTester"
+  PROVISIONING_TAG = f"python-provisioning/AWS.org_{NAME}"
+  REGION = "us-west-2"
+  LAMBDA_RUNTIME = "python3.8"
+  LAMBDA_DESCRIPTION = "WSGI test server lambda"
+  GATEWAY_STAGE_NAME = "testing"
+  GATEWAY_DESCRIPTION = "WSGI test server gateway"
+
+  AWSBase.class_configure(region=REGION,
+                          provisioning_tag=PROVISIONING_TAG,
+                          app={
+                              'name': NAME,
+                              'provisioning_tag': PROVISIONING_TAG,
+                              'lambda_runtime': LAMBDA_RUNTIME,
+                              'lambda_description': LAMBDA_DESCRIPTION,
+                              'gateway_stage_name': GATEWAY_STAGE_NAME,
+                              'gateway_description': GATEWAY_DESCRIPTION,
+                          })
+#+END_SRC
+
+* AWS services specializations
+
+Setup mostly leans on renlabs.provisioning.aws, this section provides supporting
+stuff like the Lambda runtime and any overrides needed to default service setup.
+
+** The Lambda runtime
+*** WSGI runner
+#+BEGIN_SRC python :eval no :tangle work/_lambda_function.py :mkdirp true
+  from renlabs.runtime.aws.wsgi.apigatewayv2 import wsgi_lambda_handler_APIGatewayv2
+  from werkzeug.testapp import test_app
+  def lambda_handler(event, context):
+      return wsgi_lambda_handler_APIGatewayv2(test_app, event, context)
+#+END_SRC
+
+*** Lambda package builder
+#+BEGIN_SRC bash :results output silent :tangle work/_make_lambda_package.sh :mkdirp true :shebang "#! /bin/bash -x"
+  w="$(dirname ${0})"
+  rm -rf "$w/lambda-dir"
+  INSTALL_ONLY_RUNTIME=renlabs.runtime.aws.wsgi
+  export INSTALL_ONLY_RUNTIME
+  ${PYTHON:="$w/bin/python"} -m pip install --target "$w/lambda-dir" Werkzeug "$w/.." # git+https://github.com/swork/cloud-provisioning.git
+  cp "$w/_lambda_function.py" "$w/lambda-dir"
+  pushd "$w/lambda-dir"
+  zip -r9 ../function.zip .
+  popd
+#+END_SRC
+
+* AWS invocations
+Each item below is a Python module suitable for import into application-specific
+AWS service manipulation scripts, and a standalone script manipulating AWS
+services for the wsgiTester demo.
+
+** =_create.py=
+=_create= establishes the service components in AWS. It is not
+idempotent - it assumes no components exist. (The matching destroy script IS
+idempotent, so you can run destroy before create whether it's needed or not.)
+
+#+BEGIN_SRC python :tangle work/_create.py
+  """Create AWS services. As a script, twiddle AWS so these wsgiTester components
+  are installed and ready to go. As a module, provide a generic create function
+  that can be used as-is or serve as an example for something more
+  application-specific."""
+
+  import sys, os.path, time
+
+  def create(application_setup, assume_role=False, assume_function=False):
+      """Create AWS services."""
+      ler = application_setup.LambdaExecutionRole()
+      if assume_role:
+          role_obj = ler.find()
+      else:
+          role_obj = ler.create()
+          time.sleep(10.0)
+      role_arn = role_obj._role_arn
+
+      if assume_function:
+          pass
+      else:
+          zipfilename = f'{os.path.dirname(__file__)}/function.zip'
+          application_setup.LambdaFunction().create(role_arn, zipfilename)
+
+      application_setup.GatewayApi().create()
+
+  if __name__ == '__main__':
+      if os.path.dirname(__file__) not in sys.path:
+          sys.path.append(os.path.dirname(__file__))
+      import argparse
+      import _application_setup  # local wsgiTester definitions
+
+      p = argparse.ArgumentParser()
+      p.add_argument('--assume-role', action='store_true', default=False)
+      p.add_argument('--assume-function', action='store_true', default=False)
+      a = p.parse_args()
+
+      create(_application_setup,
+             assume_role=a.assume_role,
+             assume_function=a.assume_function)
+
+      # Default-route endpoint for test installation
+      _application_setup.DefaultRoute().create()
+#+END_SRC
+
+** =_destroy.py=
+The destroy script wipes out everything the create script set up. Most stuff it
+finds by a provisioning tag; some things just can't be found this way, thanks
+Amazon, so they're run down individually. This script is intended to be
+idempotent, fine to run whether there's everything to do, anything to do, or
+not.
+
+#+BEGIN_SRC python :tangle work/_destroy.py :noweb no-export
+  """Remove AWS services. As a script, twiddle AWS so these wsgiTester components
+  don't exist. As a module, provide a generic destroy function that can be used
+  as-is or serve as an example for something more application-specific. Intended
+  to be idempotent - it should always run without error, regardless of whether
+  there's anything for it to do."""
+
+  from renlabs.provisioning.aws import (
+      nuke_arns,
+      nuke_roles,
+      get_gettable_tagged_things_arns,
+      get_tagged_role_names)
+
+  def destroy(application_setup):
+      try:
+          api_id = application_setup.GatewayApi().destroy()
+      except:
+          pass
+      lfo = application_setup.LambdaFunction()
+      function_arn = lfo.destroy()
+      role_arn = application_setup.LambdaExecutionRole().destroy()
+      wipeouts = nuke_arns(
+          lfo.region,
+          get_gettable_tagged_things_arns(
+              lfo.region,
+              lfo.provisioning_tag))
+      wipeouts.extend(
+          nuke_roles(
+              get_tagged_role_names(
+                  lfo.provisioning_tag)))
+      if len(wipeouts) > 0:
+          print("Deleted by tag - check logic:")
+          print("\n".join(list(map(lambda x: f"  {x}", wipeouts))))
+
+  if __name__ == '__main__':
+      import sys, os.path
+      if os.path.dirname(__file__) not in sys.path:
+          sys.path.append(os.path.dirname(__file__))
+      import _application_setup
+      sys.exit(
+          destroy(_application_setup))
+#+END_SRC
+
+** =_update_handler.py=
+It's way quicker to run this after making a change that only affects the
+Lambda runtime than to do a full destroy/create cycle. This is not idempotent -
+it assumes the Lambda function is fully set up and happy, and simply replaces
+the code package.
+#+BEGIN_SRC python :tangle work/_update_handler.py
+  import sys, os.path
+  if os.path.dirname(__file__) not in sys.path:
+      sys.path.append(os.path.dirname(__file__))
+
+  def update_handler(application_setup, lambda_zipfile):
+      lambda_obj = application_setup.LambdaFunction().find()
+      lambda_obj.update_handler(lambda_zipfile)
+
+  if __name__ == '__main__':
+      import _application_setup
+      sys.exit(
+          update_handler(_application_setup,
+                         f'{os.path.dirname(__file__)}/function.zip'))
+#+END_SRC
+
+** =_endpoint.py=
+The wsgiTester service doesn't need specific customized endpoint setup, but some
+services do. If so this script can serve as an example. (For the AWS test setup
+I've rolled the ~Route().create()~ calls into =_create.py=.)
+#+BEGIN_SRC python :tangle work/_endpoint.py
+  import sys, os.path
+  if os.path.dirname(__file__) not in sys.path:
+      sys.path.append(os.path.dirname(__file__))
+  if __name__ == '__main__':
+      import _application_setup
+      import argparse
+
+      p = argparse.ArgumentParser()
+      p.add_argument('--establish', action='store_true', default=False)
+      p.add_argument('--remove', action='store_true', default=False)
+      a = p.parse_args()
+
+      if (a.establish and a.remove) or not (a.establish or a.remove):
+          raise RuntimeError("Exactly one of --establish or --remove is required")
+
+      raise RuntimeError(f"This program is unused in {application_setup.name}")
+
+      if a.establish:
+          _application_setup.Route('GET', '/').create()
+          _application_setup.Route('POST', '/').create()
+      elif a.remove:
+          _application_setup.Route('GET', '/').destroy()
+          _application_setup.Route('POST', '/').destroy()
+#+END_SRC
+
+* The =_setup.sh= script
+
+The Python interpreter should match the one chosen for the Lambda runtime. You
+can specify a non-default Python as the first parameter, or you can arrange that
+"python" refers to the right interpreter (for example, use Bash ~alias~ and
+source this script like ~. _setup.sh~). Or just adjust ~lambda_runtime~ (in
+[[Declarations]]) to match your ~python -V~.
+
+#+BEGIN_SRC sh :results output silent :tangle work/_setup.sh :export yes :eval yes :mkdirp true :shebang "#! /bin/bash -x"
+w="$(dirname ${0})"
+aw="$(realpath $w)"
+OUTER_PYTHON=${1:-python}
+${OUTER_PYTHON} -m venv "$aw"
+PYTHON="$aw/bin/python"
+${PYTHON} -m pip install --upgrade pip  # need --install-option
+${PYTHON} -m pip install "$aw/.."  # git+https://github.com/swork/cloud-provisioning.git
+#+END_SRC
+
