@@ -324,7 +324,7 @@ aw="$(realpath $w)"
 OUTER_PYTHON=${1:-python}
 ${OUTER_PYTHON} -m venv "$aw"
 PYTHON="$aw/bin/python"
-${PYTHON} -m pip install --upgrade pip  # need --install-option
-${PYTHON} -m pip install "$aw/.."  # git+https://github.com/swork/cloud-provisioning.git
+${PYTHON} -m pip install --upgrade pip
+${PYTHON} -m pip install git+https://github.com/swork/cloud-provisioning.git
 #+END_SRC
 
