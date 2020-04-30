@@ -35,6 +35,7 @@ def wsgi_lambda_handler_APIGatewayv2(app_object, event, context):
         return (f'http://{rctx["domainName"]}:443{maybe_slash_stage}',
                 adjusted_path)
     base_url, adjusted_path  = _(event)
+    logger.debug(f'event->environ - assigning base_url:{base_url}, adjusted_path:{adjusted_path}')
 
     b = EnvironBuilder(
         path=adjusted_path,
