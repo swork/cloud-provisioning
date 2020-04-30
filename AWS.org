@@ -150,7 +150,7 @@ stuff like the Lambda runtime and any overrides needed to default service setup.
   ${PYTHON:="$w/bin/python"} -m pip install --target "$w/lambda-dir" Werkzeug "$w/.." # git+https://github.com/swork/cloud-provisioning.git
   cp "$w/_lambda_function.py" "$w/lambda-dir"
   pushd "$w/lambda-dir"
-  zip -r9 ../function.zip .
+  zip -r9q ../function.zip .
   popd
 #+END_SRC
 
