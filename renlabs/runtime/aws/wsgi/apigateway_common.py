@@ -79,17 +79,7 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
     logger.debug(f'{__name__} event: {json.dumps(event)}')
 
     data = None
-
-    # Oops, a difference of opinion: Werkzeug accepts PUT/POST/PATCH without a
-    # body and supplies no Content-Length, but wsgidav responds 411 to
-    # PUT/POST/PATCH without a Content-Length. So substitute an empty body for
-    # a missing body with these methods.
     body = event.get('body')
-    if body is None and (
-            method == 'POST' or method == 'PUT' or method == 'PATCH'):
-        data = b''
-        body = b''
-        # No content-type: it's a SHOULD in RFCs; plus, what to supply?
 
     if body:
         data = base64.b64decode(body) if event.get('isBase64Encoded') else body
@@ -109,6 +99,16 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
         data=data,
         query_string=query_string,
         method=method)
+
+    # Oops, a difference of opinion: Werkzeug accepts PUT/POST/PATCH without a
+    # body and supplies no Content-Length, but wsgidav responds 411 to
+    # PUT/POST/PATCH without a Content-Length.
+    methods_expecting_body = ['POST', 'PUT', 'PATCH']
+    if (
+            b.headers.get('content-length') is None
+            and method in methods_expecting_body):
+        b.headers['content-length'] = 0
+        logger.warning(f'Supplying missing content-length:0 for method:{method!r}')
 
     logger.debug(f'{__name__} environ: {b.get_environ()}')
     response = Client(app_object, ResponseWrapperAPIGateway).open(b).get_response()
