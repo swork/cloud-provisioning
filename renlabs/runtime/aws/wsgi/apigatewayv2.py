@@ -35,7 +35,7 @@ def wsgi_lambda_handler_APIGatewayv2(app_object, event, context):
         return (f'http://{rctx["domainName"]}:443{maybe_slash_stage}',
                 adjusted_path)
     base_url, adjusted_path  = _(event)
-    logger.debug(f'event->environ - assigning base_url:{base_url}, adjusted_path:{adjusted_path}')
+    logger.debug(f'event->environ - assigning base_url:{base_url}, adjusted_path:{adjusted_path}. Headers: {wzh!r}')
 
     b = EnvironBuilder(
         path=adjusted_path,
@@ -43,7 +43,7 @@ def wsgi_lambda_handler_APIGatewayv2(app_object, event, context):
         headers=wzh.to_wsgi_list(),
         query_string=event['rawQueryString'],
         method=event['requestContext']['http']['method'])
-    logger.debug(f'{__name__} apigatewayv2 environ: {b.get_environ()}')
+    logger.debug(f'{__name__} environ: {b.get_environ()}')
     response = Client(app_object, ResponseWrapperAPIGateway).open(b).get_response()
     restore_level(logger, saveLevel)
     return response
