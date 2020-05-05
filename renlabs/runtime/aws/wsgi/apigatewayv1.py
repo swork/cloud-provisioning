@@ -52,7 +52,7 @@ def wsgi_lambda_handler_APIGatewayv1(app_object, event, context):
     b = EnvironBuilder(
         path=adjusted_path,
         base_url=base_url,
-        headers=wzh.to_wsgi_list(),
+        headers=wzh,
         query_string=query_string,
         method=event['httpMethod'])
     logger.debug(f'{__name__} environ: {b.get_environ()}')
