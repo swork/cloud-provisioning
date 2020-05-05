@@ -87,6 +87,7 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
     body = event.get('body')
     if body is None and (
             method == 'POST' or method == 'PUT' or method == 'PATCH'):
+        data = b''
         body = b''
         # No content-type: it's a SHOULD in RFCs; plus, what to supply?
 
