@@ -1,7 +1,9 @@
+import json
 import base64
+import os
 from .common import ResponseWrapperBase
 
-import logging, os
+import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(int(os.environ.get('LEVEL', logging.DEBUG)))
 

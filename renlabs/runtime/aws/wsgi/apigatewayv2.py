@@ -1,7 +1,5 @@
 # see __init__.py for note about environ context
 import os
-import json
-import base64
 import logging
 logging.basicConfig(datefmt='')
 logger = logging.getLogger(__name__)
