@@ -80,18 +80,18 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
 
     data = None
     body = event.get('body')
-
     if body:
         data = base64.b64decode(body) if event.get('isBase64Encoded') else body
     if isinstance(data, bytes):
-        data_present = data if len(data) < 20 else (data[:17] + b'...')
+        data_present = data if len(data) < 200 else (data[:200] + b'...')
     elif isinstance(data, str):
-        data_present = data if len(data) < 20 else (data[:17] + '...')
+        data_present = data if len(data) < 200 else (data[:200] + '...')
     elif data is None:
         data_present = None
     else:
         data_present = f'(unexpected type {type(data)})'
     logger.debug(f'{__name__} established body data:{data_present!r}, headers follow...')
+
     b = EnvironBuilder(
         path=adjusted_path,
         base_url=base_url,
