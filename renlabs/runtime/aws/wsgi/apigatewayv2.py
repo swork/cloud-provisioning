@@ -43,7 +43,7 @@ def wsgi_lambda_handler_APIGatewayv2(app_object, event, context):
         headers=wzh.to_wsgi_list(),
         query_string=event['rawQueryString'],
         method=event['requestContext']['http']['method'])
-    logger.debug(f'v2 environ: {b.get_environ()}')
+    logger.debug(f'{__name__} apigatewayv2 environ: {b.get_environ()}')
     response = Client(app_object, ResponseWrapperAPIGateway).open(b).get_response()
     restore_level(logger, saveLevel)
     return response

@@ -56,7 +56,7 @@ class ResponseWrapperAPIGateway(ResponseWrapperBase):
             'isBase64Encoded': True
         }
         logger.info(d)
-        logger.debug(f'Full body: {self.body_from_wsgi()!r}')
+        logger.debug(f'{__name__} response_dict Full body: {base64.b64decode(self.body_from_wsgi())!r}')
         d['body'] = prepared_body
         return d
 
