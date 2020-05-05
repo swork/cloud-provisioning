@@ -16,6 +16,6 @@ class ResponseWrapperBase(BaseResponse):
     def get_response(self):
         response_dict = self.response_dict(
             prepared_headers=self.headers_from_wsgi(),
-            prepared_body=self.body_from_wsgi(), )
+            prepared_body=self.body_from_wsgi())
         return response_dict
 

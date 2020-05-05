@@ -33,6 +33,7 @@ class ResponseWrapperLambdaAtEdge(ResponseWrapperBase):
         return body
 
     def response_dict(self, prepared_headers, prepared_body):
+        """Override providing a Lambda@Edge response from WSGI response"""
         trunc_body = (prepared_body[:20] + b'...'
                       if len(prepared_body) > 25
                       else prepared_body)

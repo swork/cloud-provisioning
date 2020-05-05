@@ -48,20 +48,21 @@ class ResponseWrapperAPIGateway(ResponseWrapperBase):
         return body
 
     def response_dict(self, prepared_headers, prepared_body):
-        trunc_body = (prepared_body[:20] + b'...'
-                      if len(prepared_body) > 25
-                      else prepared_body)
-        d = {
+        """Override base supplying APIGateway response from WSGI response"""
+        rd = {
             'statusCode': self.status_code,
-            'body': trunc_body,
+            'body': prepared_body,
             'headers': prepared_headers[0],
             'multiValueHeaders': prepared_headers[1],
             'isBase64Encoded': True
         }
-        logger.info(d)
-        logger.debug(f'{__name__} response_dict Full body: {base64.b64decode(self.body_from_wsgi())!r}')
-        d['body'] = prepared_body
-        return d
+        d = copy.deepcopy(rd)
+        d['body'] = (prepared_body[:20] + b'...'
+                     if len(prepared_body) > 25
+                     else prepared_body)
+        logger.info(f'{__name__} response dict: {d!r}')
+        logger.debug(f'{__name__} ... Full body: {base64.b64decode(prepared_body)!r}')
+        return rd
 
 def wsgi_lambda_handler_APIGateway_common(app_object,
                                           event,
@@ -78,6 +79,8 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
     body = event.get('body')
     if body:
         data = base64.b64decode(body) if event.get('isBase64Encoded') else body
+    data_present = data if len(data) < 20 else (data[:17] + b'...')
+    logger.debug(f'{__name__} established body data:{data_present!r}, headers follow...')
     b = EnvironBuilder(
         path=adjusted_path,
         base_url=base_url,
