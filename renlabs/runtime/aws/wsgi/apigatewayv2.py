@@ -1,5 +1,8 @@
 # see __init__.py for note about environ context
-import logging, os, json
+import os
+import json
+import base64
+import logging
 logging.basicConfig(datefmt='')
 logger = logging.getLogger(__name__)
 logger.setLevel(int(os.environ.get('LEVEL', logging.DEBUG)))
@@ -35,12 +38,16 @@ def wsgi_lambda_handler_APIGatewayv2(app_object, event, context):
         return (f'http://{rctx["domainName"]}:443{maybe_slash_stage}',
                 adjusted_path)
     base_url, adjusted_path  = _(event)
-    logger.debug(f'event->environ - assigning base_url:{base_url}, adjusted_path:{adjusted_path}. Headers: {wzh!r}')
+    logger.debug(f'{__name__} event->environ - assigning base_url:{base_url}, adjusted_path:{adjusted_path}. Headers: {wzh!r}')
 
+    data = None
+    if event.body:
+        data = base64.b64decode(event.body) if event.isBase64Encoded else event.body
     b = EnvironBuilder(
         path=adjusted_path,
         base_url=base_url,
         headers=wzh,
+        data=data,
         query_string=event['rawQueryString'],
         method=event['requestContext']['http']['method'])
     logger.debug(f'{__name__} environ: {b.get_environ()}')
