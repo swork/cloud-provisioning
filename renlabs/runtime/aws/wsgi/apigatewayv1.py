@@ -9,13 +9,12 @@ logger.setLevel(int(os.environ.get('LEVEL', logging.DEBUG)))
 from .apigateway_common import (
     set_level_for_apigateway_event,
     restore_level,
-    ResponseWrapperAPIGateway )
+    ResponseWrapperAPIGateway,
+    wsgi_lambda_handler_APIGateway_common)
 from werkzeug.test import Client, EnvironBuilder
 from werkzeug.datastructures import Headers
 
 def wsgi_lambda_handler_APIGatewayv1(app_object, event, context):
-    saveLevel = set_level_for_apigateway_event(logger, event)
-
     def qs(qsp, mvqsp):
         out = []
         for k in mvqsp:
@@ -50,20 +49,12 @@ def wsgi_lambda_handler_APIGatewayv1(app_object, event, context):
         return (f'http://{rctx["domainName"]}:443{maybe_slash_stage}',
                 adjusted_path)
     base_url, adjusted_path  = _(event)
-    logger.debug(f'{__name__} event->environ - assigning base_url:{base_url}, adjusted_path:{adjusted_path}. Headers: {wzh!r}')
 
-    data = None
-    if event.body:
-        data = base64.b64decode(event.body) if event.isBase64Encoded else event.body
-    b = EnvironBuilder(
-        path=adjusted_path,
-        base_url=base_url,
-        headers=wzh,
-        data=data,
-        query_string=query_string,
-        method=event['httpMethod'])
-    logger.debug(f'{__name__} environ: {b.get_environ()}')
-    response = Client(app_object, ResponseWrapperAPIGateway).open(b).get_response()
-    restore_level(logger, saveLevel)
-    return response
+    return wsgi_lambda_handler_APIGateway_common(
+        app_object, event, context,
+        event['httpMethod'],
+        query_string,
+        wzh,
+        base_url,
+        adjusted_path)
 

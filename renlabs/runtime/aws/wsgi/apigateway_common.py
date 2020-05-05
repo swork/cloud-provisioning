@@ -60,4 +60,30 @@ class ResponseWrapperAPIGateway(ResponseWrapperBase):
         d['body'] = prepared_body
         return d
 
+def wsgi_lambda_handler_APIGateway_common(app_object,
+                                          event,
+                                          context,
+                                          method,
+                                          query_string,
+                                          headers,
+                                          base_url,
+                                          adjusted_path):
+    saveLevel = set_level_for_apigateway_event(logger, event)
+    logger.debug(f'{__name__} event: {json.dumps(event)}')
 
+    data = None
+    body = event.get('body')
+    if body:
+        data = base64.b64decode(body) if event.get('isBase64Encoded') else body
+    b = EnvironBuilder(
+        path=adjusted_path,
+        base_url=base_url,
+        headers=headers,
+        data=data,
+        query_string=query_string,
+        method=method)
+
+    logger.debug(f'{__name__} environ: {b.get_environ()}')
+    response = Client(app_object, ResponseWrapperAPIGateway).open(b).get_response()
+    restore_level(logger, saveLevel)
+    return response
