@@ -51,17 +51,19 @@ class ResponseWrapperAPIGateway(ResponseWrapperBase):
         """Override base supplying APIGateway response from WSGI response"""
         rd = {
             'statusCode': self.status_code,
-            'body': prepared_body,
             'headers': prepared_headers[0],
             'multiValueHeaders': prepared_headers[1],
             'isBase64Encoded': True
         }
         d = copy.deepcopy(rd)
-        d['body'] = (prepared_body[:20] + b'...'
-                     if len(prepared_body) > 25
-                     else prepared_body)
+        if prepared_body:
+            rd['body'] = prepared_body
+            d['body'] = (prepared_body[:20] + b'...'
+                         if len(prepared_body) > 25
+                         else prepared_body)
         logger.info(f'{__name__} response dict: {d!r}')
-        logger.debug(f'{__name__} ... Full body: {base64.b64decode(prepared_body)!r}')
+        if prepared_body:
+            logger.debug(f'{__name__} ... Full body: {base64.b64decode(prepared_body)!r}')
         return rd
 
 def wsgi_lambda_handler_APIGateway_common(app_object,
@@ -79,7 +81,14 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
     body = event.get('body')
     if body:
         data = base64.b64decode(body) if event.get('isBase64Encoded') else body
-    data_present = data if len(data) < 20 else (data[:17] + b'...')
+    if isinstance(data, bytes):
+        data_present = data if len(data) < 20 else (data[:17] + b'...')
+    elif isinstance(data, str):
+        data_present = data if len(data) < 20 else (data[:17] + '...')
+    elif isinstance(data, NoneType):
+        data_present = None
+    else:
+        data_present = f'(unexpected type {type(data)})'
     logger.debug(f'{__name__} established body data:{data_present!r}, headers follow...')
     b = EnvironBuilder(
         path=adjusted_path,
