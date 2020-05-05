@@ -1,17 +1,12 @@
 # see __init__.py for note about environ context
 import os
+from werkzeug.datastructures import Headers
+from .apigateway_common import wsgi_lambda_handler_APIGateway_common
+
 import logging
 logging.basicConfig(datefmt='')
 logger = logging.getLogger(__name__)
 logger.setLevel(int(os.environ.get('LEVEL', logging.DEBUG)))
-
-from .apigateway_common import (
-    set_level_for_apigateway_event,
-    restore_level,
-    ResponseWrapperAPIGateway,
-    wsgi_lambda_handler_APIGateway_common)
-from werkzeug.test import Client, EnvironBuilder
-from werkzeug.datastructures import Headers
 
 def wsgi_lambda_handler_APIGatewayv2(app_object, event, context):
     def werkzeug_headers_from_v2(h1):

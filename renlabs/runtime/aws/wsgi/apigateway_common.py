@@ -1,6 +1,7 @@
 import json
 import base64
 import os
+from werkzeug.test import Client, EnvironBuilder
 from .common import ResponseWrapperBase
 
 import logging
