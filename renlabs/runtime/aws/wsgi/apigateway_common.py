@@ -85,7 +85,7 @@ def wsgi_lambda_handler_APIGateway_common(app_object,
         data_present = data if len(data) < 20 else (data[:17] + b'...')
     elif isinstance(data, str):
         data_present = data if len(data) < 20 else (data[:17] + '...')
-    elif isinstance(data, NoneType):
+    elif data is None:
         data_present = None
     else:
         data_present = f'(unexpected type {type(data)})'
